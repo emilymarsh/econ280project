@@ -1,0 +1,88 @@
+********************************************************************************
+** Date: 12/3/2025
+** Author: Emily Marsh
+** Purpose: Generating extensions to the results of the paper, namely, what is the effect of including the school of each study as a control? Particularly for the general heterogeneity of the treatment effect. 
+** Alternatively, could look at whether mindspark affected student's likelihood of being promoted from their current grade to the next. 
+********************************************************************************
+
+
+** Globals
+global mindspark "C:\Users\emi\Desktop\Computing Class\education replication"
+
+///	folder globals
+
+global data "$mindspark/data/"
+global output "$mindspark/output/"
+
+
+
+/// Bringing school id into the wide dataset from the school dataset by matching it with the student id. 
+
+use "${data}sc_results", clear
+
+	drop if mi(st_id)  ///seems like these might be students not in the study. the treatment indicator is missing as well.
+
+** Only keeping the later school year (2015-2016)
+	keep if year == "2015-16"
+	keep st_id school finalresult
+	isid st_id
+	
+	tempfile sch 
+	save `sch'
+
+
+
+///	table 4: heterogeneity in treatment effect by sex, ses and baseline score
+	
+	/// load j-pal data wide
+
+		use "${data}ms_blel_jpal_wide", clear
+		
+		merge 1:1 st_id using `sch'
+			** 8 children are in the wide data, but not in the school results data. 
+	/// gen interactions
+		drop if _m == 1
+		drop _m
+		
+		gen treat_fem=treat*st_fe
+		gen treat_ses=treat*ses
+		gen treat_lmath=treat*m_theta_mle1
+		*ajg: 2 students w/o endline math scores
+		gen treat_lhindi=treat*h_theta_mle1
+		*ajg: 2 students w/o endline hindi scores
+		gen treatschool = treat*school
+
+	///	label interactions	
+			
+		lab var treat_fem "Treatment * Female"
+		lab var treat_ses "Treatment * SES index"
+		lab var treat_lmath "Treatment * Baseline math score"
+		lab var treat_lhindi "Treatment * Baseline Hindi score"
+		lab var treatschool "Treatment * School ID"
+
+	///	run regressions
+	
+		xtreg m_theta_mle2 treat i.school treatschool m_theta_mle1, robust i(strata) fe
+		outreg2 using "${output}table4.tex", tex(frag) label less(1) replace noaster 
+			
+		xtreg h_theta_mle2 treat i.school treatschool h_theta_mle1, robust i(strata) fe
+		outreg2 using "${output}table4.tex", tex(frag) label less(1) append noaster ///
+  addnote("Robust standard errors in parentheses")
+/*
+		xtreg m_theta_mle2 treat st_fe treat_fem m_theta_mle1 treat, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) replace noaster
+			
+		xtreg h_theta_mle2 treat st_fe treat_fem h_theta_mle1, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) append noaster
+
+		xtreg m_theta_mle2 treat ses treat_ses m_theta_mle1, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) append noaster
+			
+		xtreg h_theta_mle2 treat ses treat_ses h_theta_mle1, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) append noaster
+		
+		xtreg m_theta_mle2 treat treat_lmath m_theta_mle1, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) append noaster
+			
+		xtreg h_theta_mle2 treat treat_lhind h_theta_mle1, robust i(strata) fe
+		outreg2 using ${tables}table4.xls, label less(1) append noaster
